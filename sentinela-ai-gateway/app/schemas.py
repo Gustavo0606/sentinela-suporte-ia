@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from pydantic import BaseModel, ValidationError
 from enum import Enum
 import httpx
 
@@ -24,7 +25,7 @@ class outputOllama(BaseModel):
     urgencia: int = Field(..., ge=1, le=5, description="Nível de criticidade técnica calculado de 1 a 5")
     resumo: str = Field(description="Uma frase curta resumindo a queixa com no máximo 15 palavras")
 
-@app.post("/triar", response_model=outputOllama)
+@app.post("/analyze", response_model=outputOllama)
 async def fazerTriagem(entrada : review):
     promptTriagem = f"""
 Você é o Sentinela, um agente especialista em triagem cognitiva de chamados de suporte técnico. Sua única tarefa é analisar o texto do cliente e extrair informações estruturadas.
@@ -55,7 +56,8 @@ Saída JSON estrita:
     payload_ollama = {
         "model": "mistral",
         "prompt": promptTriagem,
-        "stream": False
+        "stream": False,
+        "format": "json"
     }
     async with httpx.AsyncClient(timeout=9.0) as client:
         try:
@@ -68,8 +70,8 @@ Saída JSON estrita:
             objeto_final_validado = outputOllama.model_validate_json(texto_gerado_pela_ia)
             
             return objeto_final_validado
-        except Exception as e:
-            raise HTTPException(
-                status_code= 422,
-                detail= "falha na comunicação com o ollama"
-            )
+        except httpx.HTTPError as erroRede:
+            raise HTTPException(status_code=502, detail="erro de rede")
+        except ValidationError as erroValidacao:
+            raise HTTPException(status_code=422, detail="falha estrutural dos dados")
+
