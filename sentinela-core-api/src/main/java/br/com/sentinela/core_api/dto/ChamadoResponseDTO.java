@@ -7,6 +7,7 @@ public record ChamadoResponseDTO(
         Long id,
         String descricaoBruta,
         StatusChamado status,
-        LocalDateTime dataCriacao
+        LocalDateTime dataCriacao,
+        Integer scorePrioridade
 ) {
 }
