@@ -36,14 +36,30 @@ public class AITriagemService {
             triagem.setSentimento(Sentimento.valueOf(respostaIA.sentimento().toUpperCase()));
             triagem.setChamado(chamadoTriagem);
 
+            Integer valorPrioridade = calcularPrioridade(triagem.getUrgencia(), triagem.getSentimento());
             chamadoTriagem.setTriagemIA(triagem);
+            chamadoTriagem.setScorePrioridade(valorPrioridade);
             chamadoTriagem.setStatus(StatusChamado.TRIADO_AGUARDANDO_ATENDENTE);
 
 
         }catch (Exception e) {
             e.printStackTrace();
             chamadoTriagem.setStatus(StatusChamado.PENDENTE_FILA_COMUM);
+            chamadoTriagem.setScorePrioridade(50);
         }
         chamadoRepository.save(chamadoTriagem);
     }
+    public Integer calcularPrioridade(int urgencia, Sentimento sentimento){
+        Integer totalUrgencia = urgencia * 15;
+        Integer totalSentimento = valorSentimento.getOrDefault(sentimento, 0);
+        return totalSentimento + totalUrgencia;
+    }
+    private static final Map <Sentimento, Integer> valorSentimento = Map.of(
+            Sentimento.IRRITADO, 20,
+            Sentimento.NEUTRO,10,
+            Sentimento.SATISFEITO,0,
+            Sentimento.NAO_ANALISADO,0
+    );
+
+
 }

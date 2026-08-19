@@ -27,6 +27,8 @@ public class Chamado {
 
     private LocalDateTime dataResolucao;
 
+    private Integer scorePrioridade;
+
     @OneToOne(mappedBy = "chamado", cascade = CascadeType.ALL)
     private TriagemIA triagemIA;
 }
