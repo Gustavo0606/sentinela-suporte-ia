@@ -1,77 +1,115 @@
-# Sentinela - Triagem de Chamados com Inteligência Artificial
+# 🛡️ Sentinela IA — Triagem Inteligente de Suporte
 
-O **Sentinela** é uma solução inteligente e automatizada para recepção, triagem e classificação de chamados de suporte técnico. O objetivo principal do sistema é ler as reclamações textuais enviados por clientes e, utilizando Inteligência Artificial, extrair automaticamente o sentimento do usuário, a categoria do problema, o nível de urgência técnica e um resumo estruturado da queixa.
-
-Para garantir a total privacidade e a soberania dos dados dos clientes, o projeto adota um modelo de linguagem (LLM) executado **100% localmente**, mitigando tráfego de dados sensíveis para APIs de nuvem externas e custos variáveis.
+O **Sentinela IA** é uma plataforma distribuída de triagem e priorização automática de chamados de suporte técnico. Utilizando Inteligência Artificial local (LLM via Ollama), o sistema analisa o teor emocional, a urgência técnica e a categoria de cada solicitação, calculando dinamicamente a prioridade de atendimento na fila.
 
 ---
 
-## 🏗️ Estrutura do Ecossistema (Monorepo)
+## 💻 Recomendação de Hardware
 
-O projeto é baseado em uma arquitetura modular dividida em três frentes principais:
+Para o processamento das inferências da IA (Modelo Mistral):
 
-* **`sentinela-core-api/`**: API principal desenvolvida em **Java e Spring Boot**, responsável pelas regras de negócio, segurança, persistência transacional de dados e controle de estados dos chamados.
-* **`sentinela-ai-gateway/`**: Gateway cognitivo desenvolvido em **Python e FastAPI**, encarregado da engenharia de prompts, higienização de strings e validação rigorosa dos payloads trafegados com a IA.
-* **`sentinela-frontend/`**: Interface visual do sistema para a interação dos analistas de suporte.
-
----
-
-## 🛠️ Infraestrutura e Stack Homologada
-
-Até o momento, a base estrutural do ambiente de desenvolvimento foi consolidada com as seguintes tecnologias:
-
-### Camada de Dados (Persistência)
-
-* **Banco de Dados:** PostgreSQL 16-Alpine orquestrado via Docker.
-
-
-* **Mapeamento de Rede:** Porta física local redirecionada para **`5433`** para neutralizar conflitos nativos de portas em ambiente Windows.
-
-
-* **Integridade:** Persistência de dados blindada através de volumes nomeados do Docker (`postgres_data`), garantindo resiliência contra desligamentos e manutenções do contêiner.
-
-
-
-### Camada de Inteligência Artificial Local
-
-* **Orquestrador:** Ollama (rodando como serviço nativo de background).
-* **Modelo de Linguagem (LLM):** Mistral 7B (otimizado para inferências rápidas e geração de texto estruturado).
-
-### Ambiente Python (Gateway de IA)
-
-* **Framework:** FastAPI com suporte assíncrono nativo para alto volume de requisições.
-* **Garantia de Tipagem/Contrato:** Pydantic v2 mapeando enums estritos e limites de criticidade numérica para barrar alucinações de dados da IA.
-* **Isolamento de Ambiente:** Utilização de Ambiente Virtual (`.venv`) com fixação rigorosa de versões de dependências em `requirements.txt`.
-
-
+* **Com GPU (Recomendado):** Placa NVIDIA com suporte a CUDA e no mínimo 6 GB a 8 GB de VRAM (respostas entre 1 a 3 segundos).
+* **Apenas CPU:** Mínimo de 16 GB de RAM e processador quad-core moderno (respostas entre 10 a 30 segundos).
 
 ---
 
-## 🚀 Como Inicializar o Ambiente Atual
+## 🛠️ Arquitetura e Tecnologias
 
-### 0. Configurar Variáveis de Ambiente
-Antes de subir os serviços, você precisa criar o seu arquivo de credenciais local. Duplique o arquivo de exemplo e preencha com seus dados:
+| Serviço | Tecnologia | Descrição |
+| --- | --- | --- |
+| **`sentinela-core-api`** | Java 22, Spring Boot 3, JPA, HikariCP | API principal responsável pela gestão dos chamados, persistência e regras de negócio. |
+| **`sentinela-ai-gateway`** | Python 3.11, FastAPI, Pydantic, httpx | Microserviço responsável pela engenharia de prompt, validação de contrato e comunicação com o Ollama. |
+| **`postgres-db`** | PostgreSQL 16 (Alpine) | Banco de dados relacional para persistência de chamados e histórico de triagens. |
+| **`Ollama`** | LLM Mistral (Local no Host) | Engine de IA para processamento de linguagem natural e extração de JSON estruturado. |
+| **`sentinela-frontend`** | HTML5, CSS3, JavaScript (Fetch API) | Interfaces visuais do cliente (`cliente.html`) e do atendente (`dashboard.html`). |
+
+---
+
+## 🔄 Fluxo de Funcionamento e Regra de Negócio
+
+1. **Abertura do Chamado:** O cliente submete a solicitação via `cliente.html`.
+2. **Processamento Assíncrono:** A `core-api` salva o registro inicial e aciona assincronamente (`@Async`) o `sentinela-ai-gateway`.
+3. **Triagem Cognitiva (LLM):** O gateway FastAPI envia a requisição ao Ollama via `host.docker.internal:11434`, exigindo validação Pydantic dos dados:
+* **Sentimento:** `IRRITADO`, `NEUTRO`, `SATISFEITO`, `NAO_ANALISADO`
+* **Categoria:** `FINANCEIRO`, `BUG`, `DUVIDA`, `OUTROS`, `INVALIDO`
+* **Urgência:** Escala de 1 a 5
+* **Resumo:** Frase síntese com no máximo 15 palavras
+
+
+4. **Cálculo da Prioridade:** A `core-api` calcula o score final utilizando a fórmula:
+
+$$\text{Score} = (\text{Urgência} \times 15) + \text{Peso do Sentimento}$$
+
+
+
+*(Pesos de Sentimento: `IRRITADO` = 20 pts, `NEUTRO` = 10 pts, `SATISFEITO`/`NAO_ANALISADO` = 0 pts)*
+5. **Resiliência (Fallback):** Em caso de falha de conexão com a IA ou estouro de timeout, o chamado assume o status `PENDENTE_FILA_COMUM` com score fixo `50`, garantindo tolerância a falhas sem perda de dados.
+
+---
+
+## ⚙️ Pré-requisitos e Configuração
+
+### 1. Requisitos do Sistema
+
+* **Docker Desktop** instalado e em execução.
+* **Ollama** instalado no sistema operacional host (Windows/Linux/macOS).
+
+### 2. Configurar o Ollama e Modelo
+
+No terminal do seu sistema operacional, faça o download do modelo e garanta a variável para aceitar conexões vindas do Docker:
 
 ```powershell
-# No PowerShell, duplique o arquivo de exemplo
-copy .env.example .env
-```
-### 1. Inicializar o Banco de Dados
+# Baixar o modelo
+ollama pull mistral
 
-Certifique-se de ter as credenciais configuradas localmente no arquivo `.env` (que está blindado e oculto pelo `.gitignore`) e execute o comando a partir da pasta raiz:
+# Adicionar a variável de ambiente OLLAMA_HOST=0.0.0.0 no sistema operacional host
+# para permitir que o contêiner Docker acesse o Ollama
+
+```
+
+### 3. Variáveis de Ambiente (`.env`)
+
+Copie o arquivo de exemplo `.env.example` para `.env` na raiz do projeto:
 
 ```powershell
-docker compose up -d
+cp .env.example .env
 
 ```
 
-### 2. Ativar o Gateway de IA (Python)
+*(As dependências Python e a compilação do Spring Boot são tratadas automaticamente dentro das imagens Docker).*
 
-Abra uma janela de terminal dedicada, navegue até a pasta do gateway e ative o ambiente virtual isolado:
+---
+
+## 🚀 Como Executar o Projeto
+
+1. Abra o terminal na raiz do projeto (`sentinela-suporte-ia`) e execute:
+```powershell
+docker compose up -d --build
+
+```
+
+
+2. **Acessar as Aplicações:**
+* **Portal do Cliente (Abertura):** Abra o arquivo `sentinela-frontend/cliente.html` no navegador.
+* **Painel do Atendente (Dashboard):** Abra o arquivo `sentinela-frontend/dashboard.html` no navegador.
+* **Documentação OpenAPI (FastAPI):** `http://localhost:8000/docs`
+
+
+
+---
+
+## 🔍 Diagnóstico e Logs
+
+Para acompanhar a execução dos microserviços e a triagem da IA em tempo real:
 
 ```powershell
-cd sentinela-ai-gateway
-.\.venv\Scripts\Activate.ps1
+# Logs da API Java Spring Boot
+docker logs -f sentinela-core-api
+
+# Logs do Gateway de IA Python FastAPI
+docker logs -f sentinela-ai-gateway
+
+# Parar os serviços e limpar os volumes
+docker compose down -v
 
 ```
-
