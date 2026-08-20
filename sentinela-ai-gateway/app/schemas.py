@@ -1,21 +1,24 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from enum import Enum
 import httpx
+import os
 
 app = FastAPI()
+
 class Sentimento(str, Enum):
     IRRITADO = "IRRITADO"
     SATISFEITO = "SATISFEITO"
     NEUTRO = "NEUTRO"
     NAO_ANALISADO = "NAO_ANALISADO"
+
 class Categoria(str, Enum):
     FINANCEIRO = "FINANCEIRO"
     BUG = "BUG"
     DUVIDA = "DUVIDA"
     OUTROS = "OUTROS"
     INVALIDO = "INVALIDO"
+
 class review(BaseModel):
     reclamacao: str
 
@@ -26,7 +29,7 @@ class outputOllama(BaseModel):
     resumo: str = Field(description="Uma frase curta resumindo a queixa com no máximo 15 palavras")
 
 @app.post("/analyze", response_model=outputOllama)
-async def fazerTriagem(entrada : review):
+async def fazerTriagem(entrada: review):
     promptTriagem = f"""
 Você é o Sentinela, um agente especialista em triagem cognitiva de chamados de suporte técnico. Sua única tarefa é analisar o texto do cliente e extrair informações estruturadas.
 
@@ -48,10 +51,11 @@ Texto do chamado enviado pelo cliente para análise:
 ---
 
 Saída JSON estrita:
-
 """
 
-    ollama_url = "http://localhost:11434/api/generate"
+    # Lê o OLLAMA_HOST configurado no docker-compose.yml
+    ollama_host = os.getenv("OLLAMA_HOST", "[http://host.docker.internal:11434](http://host.docker.internal:11434)")
+    ollama_url = f"{ollama_host}/api/generate"
 
     payload_ollama = {
         "model": "mistral",
@@ -59,19 +63,22 @@ Saída JSON estrita:
         "stream": False,
         "format": "json"
     }
-    async with httpx.AsyncClient(timeout=9.0) as client:
+
+    # Timeout expandido para 60 segundos para permitir a resposta da IA
+    async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             resposta_rede = await client.post(ollama_url, json=payload_ollama)
+            resposta_rede.raise_for_status()
             
             dados_resposta = resposta_rede.json()
-            
             texto_gerado_pela_ia = dados_resposta.get("response")
             
             objeto_final_validado = outputOllama.model_validate_json(texto_gerado_pela_ia)
-            
             return objeto_final_validado
-        except httpx.HTTPError as erroRede:
-            raise HTTPException(status_code=502, detail="erro de rede")
-        except ValidationError as erroValidacao:
-            raise HTTPException(status_code=422, detail="falha estrutural dos dados")
 
+        except httpx.HTTPError as erroRede:
+            print(f"Erro ao conectar no Ollama: {erroRede}")
+            raise HTTPException(status_code=502, detail="erro de rede ao conectar no ollama")
+        except ValidationError as erroValidacao:
+            print(f"Erro de validação do JSON da IA: {erroValidacao}")
+            raise HTTPException(status_code=422, detail="falha estrutural dos dados")

@@ -1,16 +1,55 @@
+version: '3.8'
 
 services:
   postgres-db:
     image: postgres:16-alpine
     container_name: sentinela-postgres
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-db_sentinela_suporte}
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sentinela-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-db_sentinela_suporte}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ai-gateway:
+    build: ./sentinela-ai-gateway
+    container_name: sentinela-ai-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - sentinela-network
+
+  core-api:
+    build: ./sentinela-core-api
+    container_name: sentinela-core-api
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-db_sentinela_suporte}
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/${DB_NAME:-db_sentinela_suporte}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER:-postgres}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-postgres}
+      - AI_GATEWAY_URL=http://ai-gateway:8000
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      ai-gateway:
+        condition: service_started
     networks:
       - sentinela-network
 

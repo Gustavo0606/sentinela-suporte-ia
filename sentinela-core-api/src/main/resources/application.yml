@@ -1,8 +1,8 @@
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5433/${DB_NAME:sentinela_db}
-    username: ${DB_USER:usuario_local}
-    password: ${DB_PASSWORD:senha_local}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -11,3 +11,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+ai:
+  gateway:
+    url: ${AI_GATEWAY_URL:http://localhost:8000}

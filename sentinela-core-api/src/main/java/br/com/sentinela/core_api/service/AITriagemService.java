@@ -26,9 +26,11 @@ public class AITriagemService {
         Chamado chamadoTriagem = chamadoRepository.findById(chamadoId)
                 .orElseThrow(() -> new EntityNotFoundException("Chamado não existe"));
         try {
-            IAAnalysisResponseDTO respostaIA = restClient.post().uri("/analyze")
-                    .body(Map.of("reclamacao", chamadoTriagem.getDescricaoBruta()))
-                    .retrieve().body(IAAnalysisResponseDTO.class);
+            IAAnalysisResponseDTO respostaIA = restClient.post()
+        .uri("/analyze")
+        .body(Map.of("reclamacao", chamadoTriagem.getDescricaoBruta()))
+        .retrieve()
+        .body(IAAnalysisResponseDTO.class);
             TriagemIA triagem = new TriagemIA();
             triagem.setResumo(respostaIA.resumo());
             triagem.setUrgencia(respostaIA.urgencia());
