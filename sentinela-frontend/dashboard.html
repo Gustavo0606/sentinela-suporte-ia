@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sentinela IA - Dashboard de Atendimento</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background-color: #f1f3f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .navbar-custom { background-color: #1e293b; color: white; }
+    .card-ticket { border: none; border-radius: 12px; transition: all 0.2s ease-in-out; background: white; }
+    .card-ticket:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+    .border-high { border-left: 6px solid #dc3545 !important; }
+    .border-medium { border-left: 6px solid #ffc107 !important; }
+    .border-low { border-left: 6px solid #0dcaf0 !important; }
+    .badge-score { font-size: 0.95rem; font-weight: 700; padding: 0.45rem 0.8rem; border-radius: 20px; }
+    .metric-card { border: none; border-radius: 10px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+  </style>
+</head>
+<body>
+
+<!-- Top Navbar -->
+<nav class="navbar navbar-dark navbar-custom shadow-sm mb-4">
+  <div class="container-fluid px-4">
+            <span class="navbar-brand mb-0 h1 fw-bold">
+                <i class="bi bi-shield-check text-primary me-2"></i>Sentinela IA — Painel do Atendente
+            </span>
+    <div>
+      <a href="cliente.html" class="btn btn-outline-light btn-sm rounded-pill me-2">
+        <i class="bi bi-plus-circle me-1"></i> Abrir Chamado (Cliente)
+      </a>
+      <button class="btn btn-primary btn-sm rounded-pill px-3" onclick="carregarFila()">
+        <i class="bi bi-arrow-clockwise me-1"></i> Atualizar
+      </button>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid px-4">
+
+  <!-- Métricas Rápidas -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="metric-card p-3 d-flex align-items-center">
+        <div class="rounded-circle bg-primary bg-opacity-10 p-3 me-3 text-primary">
+          <i class="bi bi-inbox-fill fs-3"></i>
+        </div>
+        <div>
+          <div class="text-muted small">Total Fila Ativa</div>
+          <h3 class="mb-0 fw-bold" id="metricTotal">0</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="metric-card p-3 d-flex align-items-center">
+        <div class="rounded-circle bg-danger bg-opacity-10 p-3 me-3 text-danger">
+          <i class="bi bi-exclamation-octagon-fill fs-3"></i>
+        </div>
+        <div>
+          <div class="text-muted small">Urgência Alta (Score ≥ 70)</div>
+          <h3 class="mb-0 fw-bold text-danger" id="metricAlta">0</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="metric-card p-3 d-flex align-items-center">
+        <div class="rounded-circle bg-warning bg-opacity-10 p-3 me-3 text-warning">
+          <i class="bi bi-clock-history fs-3"></i>
+        </div>
+        <div>
+          <div class="text-muted small">Fila Comum (Fallback)</div>
+          <h3 class="mb-0 fw-bold text-warning" id="metricFallback">0</h3>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fila Priorizada -->
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-sort-numeric-down-alt me-2 text-primary"></i>Fila de Atendimento Priorizada por IA</h5>
+        <span class="badge bg-secondary rounded-pill px-3 py-2" id="lastUpdate">Atualizado agora</span>
+      </div>
+
+      <div id="containerFila">
+        <div class="text-center py-5">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="text-muted mt-2">Carregando chamados...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API_URL = "http://localhost:8080/chamados";
+
+  async function carregarFila() {
+      const container = document.getElementById("containerFila");
+      try {
+          const response = await fetch(`${API_URL}/fila`);
+          const chamados = await response.json();
+
+          // Atualização de Métricas
+          document.getElementById("metricTotal").innerText = chamados.length;
+          document.getElementById("metricAlta").innerText = chamados.filter(c => (c.scorePrioridade || 0) >= 70).length;
+          document.getElementById("metricFallback").innerText = chamados.filter(c => c.status === "PENDENTE_FILA_COMUM").length;
+          document.getElementById("lastUpdate").innerText = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
+
+          if (chamados.length === 0) {
+              container.innerHTML = `
+                  <div class="card p-5 text-center shadow-sm border-0 rounded-4">
+                      <i class="bi bi-check2-circle text-success display-1 mb-3"></i>
+                      <h4 class="fw-bold text-dark">Nenhum chamado pendente!</h4>
+                      <p class="text-muted mb-0">A fila de atendimento está zerada no momento.</p>
+                  </div>
+              `;
+              return;
+          }
+
+          container.innerHTML = chamados.map(c => {
+              const score = c.scorePrioridade ?? 0;
+              let badgeClass = "bg-info text-dark";
+              let borderClass = "border-low";
+              let prioridadeLabel = "Baixa";
+
+              if (score >= 70) {
+                  badgeClass = "bg-danger text-white";
+                  borderClass = "border-high";
+                  prioridadeLabel = "Alta / Urgente";
+              } else if (score >= 40) {
+                  badgeClass = "bg-warning text-dark";
+                  borderClass = "border-medium";
+                  prioridadeLabel = "Média";
+              }
+
+              const dataFormatada = new Date(c.dataCriacao).toLocaleString('pt-BR');
+
+              return `
+                  <div class="card card-ticket ${borderClass} mb-3 shadow-sm p-3">
+                      <div class="card-body p-2">
+                          <div class="d-flex justify-content-between align-items-start mb-2">
+                              <div>
+                                  <span class="badge bg-dark me-2">ID #${c.id}</span>
+                                  <span class="badge bg-light text-dark border me-2">${c.status}</span>
+                                  <small class="text-muted"><i class="bi bi-clock me-1"></i>${dataFormatada}</small>
+                              </div>
+                              <div class="text-end">
+                                  <span class="badge ${badgeClass} badge-score shadow-sm">
+                                      Score: ${score} pts
+                                  </span>
+                                  <div class="small fw-semibold mt-1 text-muted">${prioridadeLabel}</div>
+                              </div>
+                          </div>
+
+                          <div class="my-3">
+                              <h6 class="fw-bold mb-1 text-secondary">Descrição do Cliente:</h6>
+                              <p class="card-text text-dark fs-6 bg-light p-3 rounded-3 border-start border-4 border-primary">
+                                  "${c.descricaoBruta}"
+                              </p>
+                          </div>
+
+                          <div class="d-flex justify-content-end align-items-center pt-2 border-top">
+                              <button class="btn btn-success btn-sm px-4 rounded-pill fw-semibold shadow-sm" onclick="resolverChamado(${c.id}, this)">
+                                  <i class="bi bi-check-lg me-1"></i> Marcar como Resolvido
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              `;
+          }).join('');
+
+      } catch (error) {
+          container.innerHTML = `
+              <div class="alert alert-danger rounded-3 shadow-sm p-4 text-center">
+                  <i class="bi bi-wifi-off fs-1 d-block mb-2"></i>
+                  <h5>Falha ao conectar com o Servidor</h5>
+                  <p class="mb-0">Certifique-se de que a API Spring Boot está rodando em <code>http://localhost:8080</code>.</p>
+              </div>
+          `;
+      }
+  }
+
+  async function resolverChamado(id, btnElement) {
+      if (!confirm(`Deseja encerrar e marcar como RESOLVIDO o chamado #${id}?`)) return;
+
+      btnElement.disabled = true;
+      btnElement.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Encerrando...`;
+
+      try {
+          const response = await fetch(`${API_URL}/${id}/resolver`, { method: "PATCH" });
+          if (response.ok) {
+              carregarFila();
+          } else {
+              alert("Erro ao resolver chamado no servidor.");
+              btnElement.disabled = false;
+          }
+      } catch (error) {
+          alert("Erro ao conectar com a API!");
+          btnElement.disabled = false;
+      }
+  }
+
+  // Auto-refresh a cada 5 segundos
+  carregarFila();
+  setInterval(carregarFila, 5000);
+</script>
+</body>
+</html>
