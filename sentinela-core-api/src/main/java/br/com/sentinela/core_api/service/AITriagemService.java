@@ -36,10 +36,15 @@ public class AITriagemService {
             triagem.setSentimento(Sentimento.valueOf(respostaIA.sentimento().toUpperCase()));
             triagem.setChamado(chamadoTriagem);
 
-            Integer valorPrioridade = calcularPrioridade(triagem.getUrgencia(), triagem.getSentimento());
             chamadoTriagem.setTriagemIA(triagem);
+            if (triagem.getCategoria() == Categoria.INVALIDO) {
+                chamadoTriagem.setScorePrioridade(0);
+                chamadoTriagem.setStatus(StatusChamado.ARQUIVADO_INVALIDO);
+            }else{
+            Integer valorPrioridade = calcularPrioridade(triagem.getUrgencia(), triagem.getSentimento());
             chamadoTriagem.setScorePrioridade(valorPrioridade);
             chamadoTriagem.setStatus(StatusChamado.TRIADO_AGUARDANDO_ATENDENTE);
+            }
 
 
         }catch (Exception e) {
